@@ -40,6 +40,6 @@ gulp.task('default', function() {
         baseDir: "./app"
     }
   });
-  gulp.watch('app/**/*.js', ['buildScripts','reload']);
+  gulp.watch(['!app/main/*.js','app/**/*.js'], ['buildScripts','reload']);
   gulp.watch(['app/**/*.html','app/**/*.css'],['reload'])
 });
