@@ -9,7 +9,10 @@ angular.module('chatApp')
     getDisplayName: function(uid){
       return users.$getRecord(uid).displayName;
     },
-    all: users
+    all: users,
+    getGravatar: function(uid){
+      return 'https://www.gravatar.com/avatar/' + users.$getRecord(uid).emailHash+'?d=wavatar';
+    },
   };
 
   return Users;
