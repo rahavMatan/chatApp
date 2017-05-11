@@ -43,3 +43,7 @@ gulp.task('default', function() {
   gulp.watch(['!app/main/*.js','app/**/*.js'], ['buildScripts','reload']);
   gulp.watch(['app/**/*.html','app/**/*.css'],['reload'])
 });
+gulp.task('watch', function() {
+  gulp.watch(['!app/main/*.js','app/**/*.js'], ['buildScripts']);
+
+});

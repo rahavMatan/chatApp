@@ -1,19 +1,31 @@
 angular.module('chatApp')
 .factory('Users',function($firebaseArray, $firebaseObject){
-  var usersRef = firebase.database().ref('users');
-  var users = $firebaseArray(usersRef);
-  var Users = {
+
+  let usersRef;
+  let usersArray;
+
+  var Users =  {
+    connect:function(){
+      console.log('connecting users');
+      usersRef = firebase.database().ref('users');
+      usersArray = $firebaseArray(usersRef);
+      return usersArray;
+    },
     getProfile: function(uid){
-      return $firebaseObject(usersRef.child(uid));
+      var profile = $firebaseObject(usersRef.child(uid));
+      return profile;
     },
     getDisplayName: function(uid){
-      return users.$getRecord(uid).displayName;
+      return usersArray.$getRecord(uid).displayName;
     },
-    all: users,
+    getAll:function(){
+      return usersArray;
+    },
     getGravatar: function(uid){
-      return 'https://www.gravatar.com/avatar/' + users.$getRecord(uid).emailHash+'?d=wavatar';
+      return 'https://www.gravatar.com/avatar/' + usersArray.$getRecord(uid).emailHash+'?d=wavatar';
     },
-  };
+
+  }
 
   return Users;
 })
