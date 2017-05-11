@@ -5,20 +5,46 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
   //   console.log('default error');
   // });
 
-  $transitions.onBefore({}, function(trans) {
+  $transitions.onBefore({to:function(state){
+      var nonAuth = ['home','login','register']
+      return nonAuth.includes(state.name)
+    }},
+    function(trans) {
+      console.log(trans.to().name+ ' is non-Auth');
       var Auth = trans.injector().get('Auth');
-      if(trans.$to().name == 'home'){
-        console.log('going home');
-        Auth.$requireSignIn().then(function(auth){
-          console.log('redirecting to channels');
-          return trans.router.stateService.target('channels');
-        }).catch(function(err){
-          return false;
-        })
-      }
+      return Auth.$requireSignIn().then(function(auth){
+        return trans.router.stateService.target('channels');
+      }).catch(function(err){
+
+      })
+    });
+  $transitions.onBefore({}, function(trans) {
+    var nonAuth = ['home','login','register']
+    if(!nonAuth.includes(trans.$to().name) ){
+      console.log(trans.$to().name + ' is Auth required');
+      var Auth = trans.injector().get('Auth');
+      return Auth.$requireSignIn().then(function(auth){
+        if(trans.$to().name !== 'profile'){
+          var Users = trans.injector().get('Users');
+          return Users.connect().$loaded().then(function(usersArray){
+            return Users.getProfile(auth.uid).$loaded().then(function(profile){
+              if(!profile.displayName){
+                return trans.router.stateService.target('profile');
+              } else {
+                return true
+              }
+            })
+          })
+        } else {
+          return true
+        }
+      }).catch(function(err){
+        return trans.router.stateService.target('home');
+      })
+    }
   });
   $transitions.onError({}, function(trans){
-    //console.log(trans.error());
+    console.log(trans.error());
   })
 })
 .config(function($stateProvider, $urlRouterProvider){
@@ -32,21 +58,6 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
     url:'/channels',
     controller:'channelsCtrl as channelsCtrl',
     templateUrl:'channels/channelsIndex.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        var Users = trans.injector().get('Users');
-        return Users.connect().$loaded().then(function(usersArray){
-          return Users.getProfile(auth.uid).$loaded().then(function(profile){
-            if(!profile.displayName){
-              return 'profile';
-            }
-          })
-        })
-      }).catch(function(er){
-        return 'home';
-      })
-    },
     resolve:{
       channels: function(Channels){
         return Channels.connect().$loaded();
@@ -89,39 +100,17 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
   .state('login', {
     url: '/login',
     controller: 'authCtrl as authCtrl',
-    templateUrl: 'auth/login.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        return 'home';
-      }, function(error){
-
-      });
-    }
+    templateUrl: 'auth/login.html'
   })
   .state('register', {
     url: '/register',
     controller: 'authCtrl as authCtrl',
-    templateUrl: 'auth/register.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        return 'home';
-      }).catch(function(err){
-
-      });
-    },
+    templateUrl: 'auth/register.html'
   })
   .state('profile', {
     url: '/profile',
     templateUrl: 'users/profile.html',
     controller:'profileCtrl as profileCtrl',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().catch(function(){
-        return 'home';
-      });
-    },
     resolve: {
       profile: function(Users, Auth){
         return Auth.$requireSignIn().then(function(auth){
@@ -129,6 +118,9 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
             return Users.getProfile(auth.uid).$loaded();
           })
         });
+      },
+      auth:function(Auth){
+        return Auth.$getAuth();
       }
     }
   })
@@ -150,6 +142,142 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
  };
  firebase.initializeApp(config);
 })
+
+ // config2(function ($stateProvider, $urlRouterProvider) {
+ //    $stateProvider
+ //      .state('home', {
+ //        url: '/',
+ //        templateUrl: 'home/home.html',
+ //        resolve: {
+ //          requireNoAuth: function($state , Auth){
+ //            return Auth.$requireAuth().then(function(auth){
+ //              $state.go('channels');
+ //            }, function(error){
+ //              return
+ //            });
+ //          }
+ //        }
+ //      })
+ //      .state('login', {
+ //        url: '/login',
+ //        controller: 'AuthCtrl as authCtrl',
+ //        templateUrl: 'auth/login.html',
+ //        controller: 'AuthCtrl as authCtrl',
+ //        resolve: {
+ //          requireNoAuth: function($state, Auth){
+ //            return Auth.$requireAuth().then(function(auth){
+ //              var userEmail = auth.password.email;
+ //              console.log('user ' + userEmail + ' has no need to login');
+ //              $state.go('home');
+ //            }, function(error){
+ //              return;
+ //            });
+ //          }
+ //        }
+ //      })
+ //      .state('register', {
+ //        url: '/register',
+ //        controller: 'AuthCtrl as authCtrl',
+ //        templateUrl: 'auth/register.html',
+ //
+ //        controller: 'AuthCtrl as authCtrl',
+ //
+ //        resolve: {
+ //          requireNoAuth: function($state, Auth){
+ //            return Auth.$requireAuth().then(function(auth){
+ //
+ //              var userEmail = auth.password.email;
+ //
+ //              console.log('user ' + userEmail +' has no need to register');
+ //              $state.go('home');
+ //            }, function(error){
+ //              return;
+ //            });
+ //          }
+ //        }
+ //      })
+ //      .state('profile', {
+ //          url: '/profile',
+ //          templateUrl: 'users/profile.html',
+ //          controller: 'ProfileCtrl as profileCtrl',
+ //          resolve: {
+ //            auth: function($state, Users, Auth){
+ //              console.log('PROFILE: checking if the user is authenticated...');
+ //              return Auth.$requireAuth().catch(function(){
+ //                console.log('user is NOT authenticated so we are going HOME');
+ //                $state.go('home');
+ //              });
+ //            },
+ //            profile: function(Users, Auth){
+ //              console.log('getting the users profile...');
+ //              return Auth.$requireAuth().then(function(auth){
+ //                //$loaded() is a function from $firebaseArray that returns a promise resolved
+ //                //  when data is available locally
+ //                return Users.getProfile(auth.uid).$loaded();
+ //            });
+ //          }
+ //        }
+ //      }).
+ //      state('channels', {
+ //        url: '/channels',
+ //        templateUrl: 'channels/index.html',
+ //        controller: 'ChannelsCtrl as channelsCtrl',
+ //        resolve: {
+ //          channels: function(Channels){
+ //            return Channels.$loaded();
+ //          },
+ //          profile: function($state, Auth, Users){
+ //            return Auth.$requireAuth().then(function(auth){
+ //              return Users.getProfile(auth.uid).$loaded().then(function(profile){
+ //                if (profile.displayName){
+ //                  return profile;
+ //                } else {
+ //                  $state.go('profile');
+ //                }
+ //              });
+ //            }, function(error){
+ //              $state.go('home');
+ //            });
+ //          }
+ //        }
+ //      }).
+ //      state('channels.create', { //this is a child state of the channels state
+ //        url: '/create',
+ //        templateUrl: 'channels/create.html',
+ //        controller: 'ChannelsCtrl as channelsCtrl'
+ //
+ //      }).
+ //      state('channels.messages',{ //child state of channels
+ //        url: '/{channelId}/messages', //URL has the channelId parameter
+ //        controller: 'MessagesCtrl as messagesCtrl',
+ //        templateUrl: 'channels/messages.html',
+ //        resolve: {
+ //          messages: function($stateParams, Messages){ //we acccess the param via $stateParams provided by ui-router
+ //            return Messages.forChannel($stateParams.channelId).$loaded();
+ //          },
+ //          channelName: function($stateParams, channels){ //channels dependency injected from the channels parent state
+ //            return '#'+channels.$getRecord($stateParams.channelId).name;
+ //          }
+ //        }
+ //      }).
+ //      state('channels.direct', {
+ //        url: '/{uid}/messages/direct',
+ //        templateUrl: 'channels/messages.html',
+ //        controller: 'MessagesCtrl as messagesCtrl',
+ //        resolve : {
+ //          messages: function($stateParams, Messages, profile){
+ //            return Messages.forUsers($stateParams.uid, profile.$id).$loaded();
+ //          },
+ //          channelName: function($stateParams, Users){
+ //            return Users.all.$loaded().then(function(){
+ //              return '@' + Users.getDisplayName($stateParams.uid);
+ //            });
+ //          }
+ //        }
+ //      });
+ //
+ //    $urlRouterProvider.otherwise('/');
+ //  })
 
 angular.module('chatApp')
 .controller('authCtrl',function($scope, Auth, $state){
@@ -342,139 +470,3 @@ angular.module('chatApp')
 
   return Users;
 })
-
- // config2(function ($stateProvider, $urlRouterProvider) {
- //    $stateProvider
- //      .state('home', {
- //        url: '/',
- //        templateUrl: 'home/home.html',
- //        resolve: {
- //          requireNoAuth: function($state , Auth){
- //            return Auth.$requireAuth().then(function(auth){
- //              $state.go('channels');
- //            }, function(error){
- //              return
- //            });
- //          }
- //        }
- //      })
- //      .state('login', {
- //        url: '/login',
- //        controller: 'AuthCtrl as authCtrl',
- //        templateUrl: 'auth/login.html',
- //        controller: 'AuthCtrl as authCtrl',
- //        resolve: {
- //          requireNoAuth: function($state, Auth){
- //            return Auth.$requireAuth().then(function(auth){
- //              var userEmail = auth.password.email;
- //              console.log('user ' + userEmail + ' has no need to login');
- //              $state.go('home');
- //            }, function(error){
- //              return;
- //            });
- //          }
- //        }
- //      })
- //      .state('register', {
- //        url: '/register',
- //        controller: 'AuthCtrl as authCtrl',
- //        templateUrl: 'auth/register.html',
- //
- //        controller: 'AuthCtrl as authCtrl',
- //
- //        resolve: {
- //          requireNoAuth: function($state, Auth){
- //            return Auth.$requireAuth().then(function(auth){
- //
- //              var userEmail = auth.password.email;
- //
- //              console.log('user ' + userEmail +' has no need to register');
- //              $state.go('home');
- //            }, function(error){
- //              return;
- //            });
- //          }
- //        }
- //      })
- //      .state('profile', {
- //          url: '/profile',
- //          templateUrl: 'users/profile.html',
- //          controller: 'ProfileCtrl as profileCtrl',
- //          resolve: {
- //            auth: function($state, Users, Auth){
- //              console.log('PROFILE: checking if the user is authenticated...');
- //              return Auth.$requireAuth().catch(function(){
- //                console.log('user is NOT authenticated so we are going HOME');
- //                $state.go('home');
- //              });
- //            },
- //            profile: function(Users, Auth){
- //              console.log('getting the users profile...');
- //              return Auth.$requireAuth().then(function(auth){
- //                //$loaded() is a function from $firebaseArray that returns a promise resolved
- //                //  when data is available locally
- //                return Users.getProfile(auth.uid).$loaded();
- //            });
- //          }
- //        }
- //      }).
- //      state('channels', {
- //        url: '/channels',
- //        templateUrl: 'channels/index.html',
- //        controller: 'ChannelsCtrl as channelsCtrl',
- //        resolve: {
- //          channels: function(Channels){
- //            return Channels.$loaded();
- //          },
- //          profile: function($state, Auth, Users){
- //            return Auth.$requireAuth().then(function(auth){
- //              return Users.getProfile(auth.uid).$loaded().then(function(profile){
- //                if (profile.displayName){
- //                  return profile;
- //                } else {
- //                  $state.go('profile');
- //                }
- //              });
- //            }, function(error){
- //              $state.go('home');
- //            });
- //          }
- //        }
- //      }).
- //      state('channels.create', { //this is a child state of the channels state
- //        url: '/create',
- //        templateUrl: 'channels/create.html',
- //        controller: 'ChannelsCtrl as channelsCtrl'
- //
- //      }).
- //      state('channels.messages',{ //child state of channels
- //        url: '/{channelId}/messages', //URL has the channelId parameter
- //        controller: 'MessagesCtrl as messagesCtrl',
- //        templateUrl: 'channels/messages.html',
- //        resolve: {
- //          messages: function($stateParams, Messages){ //we acccess the param via $stateParams provided by ui-router
- //            return Messages.forChannel($stateParams.channelId).$loaded();
- //          },
- //          channelName: function($stateParams, channels){ //channels dependency injected from the channels parent state
- //            return '#'+channels.$getRecord($stateParams.channelId).name;
- //          }
- //        }
- //      }).
- //      state('channels.direct', {
- //        url: '/{uid}/messages/direct',
- //        templateUrl: 'channels/messages.html',
- //        controller: 'MessagesCtrl as messagesCtrl',
- //        resolve : {
- //          messages: function($stateParams, Messages, profile){
- //            return Messages.forUsers($stateParams.uid, profile.$id).$loaded();
- //          },
- //          channelName: function($stateParams, Users){
- //            return Users.all.$loaded().then(function(){
- //              return '@' + Users.getDisplayName($stateParams.uid);
- //            });
- //          }
- //        }
- //      });
- //
- //    $urlRouterProvider.otherwise('/');
- //  })

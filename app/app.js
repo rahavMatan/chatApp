@@ -5,20 +5,46 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
   //   console.log('default error');
   // });
 
-  $transitions.onBefore({}, function(trans) {
+  $transitions.onBefore({to:function(state){
+      var nonAuth = ['home','login','register']
+      return nonAuth.includes(state.name)
+    }},
+    function(trans) {
+      console.log(trans.to().name+ ' is non-Auth');
       var Auth = trans.injector().get('Auth');
-      if(trans.$to().name == 'home'){
-        console.log('going home');
-        Auth.$requireSignIn().then(function(auth){
-          console.log('redirecting to channels');
-          return trans.router.stateService.target('channels');
-        }).catch(function(err){
-          return false;
-        })
-      }
+      return Auth.$requireSignIn().then(function(auth){
+        return trans.router.stateService.target('channels');
+      }).catch(function(err){
+
+      })
+    });
+  $transitions.onBefore({}, function(trans) {
+    var nonAuth = ['home','login','register']
+    if(!nonAuth.includes(trans.$to().name) ){
+      console.log(trans.$to().name + ' is Auth required');
+      var Auth = trans.injector().get('Auth');
+      return Auth.$requireSignIn().then(function(auth){
+        if(trans.$to().name !== 'profile'){
+          var Users = trans.injector().get('Users');
+          return Users.connect().$loaded().then(function(usersArray){
+            return Users.getProfile(auth.uid).$loaded().then(function(profile){
+              if(!profile.displayName){
+                return trans.router.stateService.target('profile');
+              } else {
+                return true
+              }
+            })
+          })
+        } else {
+          return true
+        }
+      }).catch(function(err){
+        return trans.router.stateService.target('home');
+      })
+    }
   });
   $transitions.onError({}, function(trans){
-    //console.log(trans.error());
+    console.log(trans.error());
   })
 })
 .config(function($stateProvider, $urlRouterProvider){
@@ -32,21 +58,6 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
     url:'/channels',
     controller:'channelsCtrl as channelsCtrl',
     templateUrl:'channels/channelsIndex.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        var Users = trans.injector().get('Users');
-        return Users.connect().$loaded().then(function(usersArray){
-          return Users.getProfile(auth.uid).$loaded().then(function(profile){
-            if(!profile.displayName){
-              return 'profile';
-            }
-          })
-        })
-      }).catch(function(er){
-        return 'home';
-      })
-    },
     resolve:{
       channels: function(Channels){
         return Channels.connect().$loaded();
@@ -89,39 +100,17 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
   .state('login', {
     url: '/login',
     controller: 'authCtrl as authCtrl',
-    templateUrl: 'auth/login.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        return 'home';
-      }, function(error){
-
-      });
-    }
+    templateUrl: 'auth/login.html'
   })
   .state('register', {
     url: '/register',
     controller: 'authCtrl as authCtrl',
-    templateUrl: 'auth/register.html',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().then(function(auth){
-        return 'home';
-      }).catch(function(err){
-
-      });
-    },
+    templateUrl: 'auth/register.html'
   })
   .state('profile', {
     url: '/profile',
     templateUrl: 'users/profile.html',
     controller:'profileCtrl as profileCtrl',
-    redirectTo:function(trans){
-      var Auth = trans.injector().get('Auth');
-      return Auth.$requireSignIn().catch(function(){
-        return 'home';
-      });
-    },
     resolve: {
       profile: function(Users, Auth){
         return Auth.$requireSignIn().then(function(auth){
@@ -129,6 +118,9 @@ angular.module('chatApp',['ui.router','firebase','angular-md5'])
             return Users.getProfile(auth.uid).$loaded();
           })
         });
+      },
+      auth:function(Auth){
+        return Auth.$getAuth();
       }
     }
   })
